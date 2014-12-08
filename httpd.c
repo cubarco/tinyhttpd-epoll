@@ -28,11 +28,13 @@
 #include <sys/epoll.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #define ISspace(x) isspace((int)(x))
 
 #define MAXEVENTS 1024
 #define SERVER_STRING "Server: jdbhttpd/0.1.0\r\n"
+#define PORT 55555
 
 void accept_request(int);
 void bad_request(int);
@@ -316,7 +318,10 @@ int get_line(int sock, char *buf, int size)
     {
         n = recv(sock, &c, 1, 0);
         /* DEBUG printf("%02X\n", c); */
-        if (n > 0)
+        if (-1 == n && errno == EAGAIN){
+		continue ;
+	}
+	else if (n > 0)
         {
             if (c == '\r')
             {
@@ -330,7 +335,7 @@ int get_line(int sock, char *buf, int size)
             buf[i] = c;
             i++;
         }
-        else
+	else
             c = '\n';
     }
     buf[i] = '\0';
@@ -433,6 +438,9 @@ int startup(u_short *port)
     name.sin_family = AF_INET;
     name.sin_port = htons(*port);
     name.sin_addr.s_addr = htonl(INADDR_ANY);
+    int reuse_addr = 1;
+    setsockopt(httpd, SOL_SOCKET, SO_REUSEPORT,
+		    (const char*)&reuse_addr, sizeof(reuse_addr));
     if (bind(httpd, (struct sockaddr *)&name, sizeof(name)) < 0)
         error_die("bind");
     if (*port == 0)  /* if dynamically allocating a port */
@@ -488,7 +496,7 @@ static int make_socket_non_blocking (int sfd)
 	s = fcntl (sfd, F_SETFL, flags);
 	if (s == -1) {
 		perror ("fcntl");
-	return -1;
+		return -1;
 	}
 	return 0;
 }
@@ -496,8 +504,10 @@ static int make_socket_non_blocking (int sfd)
 int main(void)
 {
     int server_sock = -1;
-    u_short port = 0;
+    u_short port = PORT;
     //pthread_t newthread;
+
+    signal(SIGPIPE, SIG_IGN);
 
     server_sock = startup(&port);
     make_socket_non_blocking(server_sock);
@@ -547,8 +557,6 @@ int main(void)
             }
         }
     }
-
     close(server_sock);
-
     return(0);
 }
