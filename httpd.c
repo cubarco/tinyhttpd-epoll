@@ -511,8 +511,8 @@ int main(void)
                 continue ;
             } else if (server_sock == events[i].data.fd){
                 client_sock = accept(server_sock,
-                                                                                                    (struct sockaddr *)&client_name,
-                                                                                                    &client_name_len);
+				     (struct sockaddr *)&client_name,
+                                     &client_name_len);
                 if (client_sock == -1)
                     error_die("accept");
                 event.data.fd = client_sock;
