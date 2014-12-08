@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <sys/epoll.h>
 #include <errno.h>
+#include <fcntl.h>
 
 #define ISspace(x) isspace((int)(x))
 
@@ -61,7 +62,7 @@ void accept_request(int client)
     size_t i, j;
     struct stat st;
     int cgi = 0;      /* becomes true if server decides this is a CGI
- * program */
+		       * program */
     char *query_string = NULL;
 
     numchars = get_line(client, buf, sizeof(buf));
@@ -475,16 +476,31 @@ void unimplemented(int client)
 
 /**********************************************************************/
 
+static int make_socket_non_blocking (int sfd)
+{
+	int flags, s;
+	flags = fcntl (sfd, F_GETFL, 0);
+	if (flags == -1) {
+		perror ("fcntl");
+		return -1;
+	}
+	flags |= O_NONBLOCK;
+	s = fcntl (sfd, F_SETFL, flags);
+	if (s == -1) {
+		perror ("fcntl");
+	return -1;
+	}
+	return 0;
+}
+
 int main(void)
 {
     int server_sock = -1;
     u_short port = 0;
-    int client_sock = -1;
-    struct sockaddr_in client_name;
-    socklen_t client_name_len = sizeof(client_name);
     //pthread_t newthread;
 
     server_sock = startup(&port);
+    make_socket_non_blocking(server_sock);
     printf("httpd running on port %d\n", port);
 
     struct epoll_event event;
@@ -493,7 +509,7 @@ int main(void)
     int eventfd = epoll_create1(0);
 
     event.data.fd = server_sock;
-    event.events = EPOLLIN; // TODO working on ET mode.
+    event.events = EPOLLIN | EPOLLET; // TODO working on ET mode.
     epoll_ctl(eventfd, EPOLL_CTL_ADD, server_sock, &event);
 
     events = calloc(MAXEVENTS, sizeof(event));
@@ -510,14 +526,21 @@ int main(void)
                 close(events[i].data.fd);
                 continue ;
             } else if (server_sock == events[i].data.fd){
-                client_sock = accept(server_sock,
-				     (struct sockaddr *)&client_name,
-                                     &client_name_len);
-                if (client_sock == -1)
-                    error_die("accept");
-                event.data.fd = client_sock;
-                event.events = EPOLLIN;
-                epoll_ctl(eventfd, EPOLL_CTL_ADD, client_sock, &event);
+		while (1) {
+		    int client_sock;
+		    struct sockaddr_in cliaddr;
+		    socklen_t cli_len = sizeof(cliaddr);
+		    client_sock = accept(server_sock,
+		    		     (struct sockaddr *)&cliaddr,
+                                         &cli_len);
+                    if (client_sock == -1)
+			if (errno == EAGAIN)
+                            break ;
+		    make_socket_non_blocking(client_sock);
+                    event.data.fd = client_sock;
+                    event.events = EPOLLIN | EPOLLET;
+                    epoll_ctl(eventfd, EPOLL_CTL_ADD, client_sock, &event);
+		}
                 continue ;
             } else {
                 accept_request(events[i].data.fd);
