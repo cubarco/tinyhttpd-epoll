@@ -22,12 +22,15 @@
 #include <strings.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <pthread.h>
+//#include <pthread.h>
 #include <sys/wait.h>
 #include <stdlib.h>
+#include <sys/epoll.h>
+#include <errno.h>
 
 #define ISspace(x) isspace((int)(x))
 
+#define MAXEVENTS 1024
 #define SERVER_STRING "Server: jdbhttpd/0.1.0\r\n"
 
 void accept_request(int);
@@ -433,7 +436,7 @@ int startup(u_short *port)
   error_die("bind");
  if (*port == 0)  /* if dynamically allocating a port */
  {
-  int namelen = sizeof(name);
+  socklen_t namelen = sizeof(name);
   if (getsockname(httpd, (struct sockaddr *)&name, &namelen) == -1)
    error_die("getsockname");
   *port = ntohs(name.sin_port);
@@ -478,22 +481,48 @@ int main(void)
  u_short port = 0;
  int client_sock = -1;
  struct sockaddr_in client_name;
- int client_name_len = sizeof(client_name);
- pthread_t newthread;
+ socklen_t client_name_len = sizeof(client_name);
+ //pthread_t newthread;
 
  server_sock = startup(&port);
  printf("httpd running on port %d\n", port);
 
+ struct epoll_event event;
+ struct epoll_event *events;
+
+ int eventfd = epoll_create1(0);
+
+ event.data.fd = server_sock;
+ event.events = EPOLLIN; // TODO working on ET mode.
+ epoll_ctl(eventfd, EPOLL_CTL_ADD, server_sock, &event);
+
+ events = calloc(MAXEVENTS, sizeof(event));
+
  while (1)
  {
-  client_sock = accept(server_sock,
-                       (struct sockaddr *)&client_name,
-                       &client_name_len);
-  if (client_sock == -1)
-   error_die("accept");
- /* accept_request(client_sock); */
- if (pthread_create(&newthread , NULL, accept_request, client_sock) != 0)
-   perror("pthread_create");
+  int n, i;
+  n = epoll_wait(eventfd, events, MAXEVENTS, -1);
+  for (i = 0; i < n; i++){
+   if ((events[i].events & EPOLLERR) ||
+       (events[i].events & EPOLLHUP) ||
+       (!events[i].events & EPOLLIN)){
+    perror("epoll error");
+    close(events[i].data.fd);
+    continue ;
+   } else if (server_sock == events[i].data.fd){
+    client_sock = accept(server_sock,
+                         (struct sockaddr *)&client_name,
+                         &client_name_len);
+    if (client_sock == -1)
+     error_die("accept");
+    event.data.fd = client_sock;
+    event.events = EPOLLIN;
+    epoll_ctl(eventfd, EPOLL_CTL_ADD, client_sock, &event);
+    continue ;
+   } else {
+    accept_request(events[i].data.fd);
+   }
+  }
  }
 
  close(server_sock);
