@@ -569,6 +569,7 @@ int main(void)
                 continue ;
             } else {
                 accept_request(events[i].data.fd);
+		epoll_ctl(eventfd, EPOLL_CTL_DEL, events[i].data.fd, &events[i]);
             }
         }
     }
