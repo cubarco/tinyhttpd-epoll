@@ -29,6 +29,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <sys/sendfile.h>
 
 #define ISspace(x) isspace((int)(x))
 
@@ -48,6 +49,10 @@ void not_found(int);
 void serve_file(int, const char *);
 int startup(u_short *);
 void unimplemented(int);
+static char buf[1024];
+static char method[255];
+static char url[255];
+static char path[512];
 
 /**********************************************************************/
 /* A request has caused a call to accept() on the server port to
@@ -56,11 +61,7 @@ void unimplemented(int);
 /**********************************************************************/
 void accept_request(int client)
 {
-    char buf[1024];
     int numchars;
-    char method[255];
-    char url[255];
-    char path[512];
     size_t i, j;
     struct stat st;
     int cgi = 0;      /* becomes true if server decides this is a CGI
@@ -139,7 +140,7 @@ void accept_request(int client)
 /**********************************************************************/
 void bad_request(int client)
 {
-    char buf[1024];
+    //char buf[1024];
 
     sprintf(buf, "HTTP/1.0 400 BAD REQUEST\r\n");
     send(client, buf, sizeof(buf), 0);
@@ -162,14 +163,25 @@ void bad_request(int client)
 /**********************************************************************/
 void cat(int client, FILE *resource)
 {
-    char buf[1024];
-
-    fgets(buf, sizeof(buf), resource);
-    while (!feof(resource))
-    {
-        send(client, buf, strlen(buf), 0);
-        fgets(buf, sizeof(buf), resource);
+    int out_fd = fileno(resource);
+    int result;
+    for (;;) {
+	result = sendfile(client, out_fd, NULL, 512);
+	if (result == 0)
+	    break;
+	else if (result == -1)
+	    if (errno == EAGAIN)
+		continue ;
     }
+    
+    //char buf[1024];
+
+    //fgets(buf, sizeof(buf), resource);
+    //while (!feof(resource))
+    //{
+    //    send(client, buf, strlen(buf), 0);
+    //    fgets(buf, sizeof(buf), resource);
+    //}
 }
 
 /**********************************************************************/
@@ -210,7 +222,7 @@ void error_die(const char *sc)
 void execute_cgi(int client, const char *path,
 			const char *method, const char *query_string)
 {
-    char buf[1024];
+    //char buf[1024];
     int cgi_output[2];
     int cgi_input[2];
     pid_t pid;
@@ -319,6 +331,7 @@ int get_line(int sock, char *buf, int size)
         n = recv(sock, &c, 1, 0);
         /* DEBUG printf("%02X\n", c); */
         if (-1 == n && errno == EAGAIN){
+		printf("never be here?\n");
 		continue ;
 	}
 	else if (n > 0)
@@ -350,7 +363,7 @@ int get_line(int sock, char *buf, int size)
 /**********************************************************************/
 void headers(int client, const char *filename)
 {
-    char buf[1024];
+    //char buf[1024];
     (void)filename;  /* could use filename to determine file type */
 
     strcpy(buf, "HTTP/1.0 200 OK\r\n");
@@ -368,7 +381,7 @@ void headers(int client, const char *filename)
 /**********************************************************************/
 void not_found(int client)
 {
-    char buf[1024];
+    //char buf[1024];
 
     sprintf(buf, "HTTP/1.0 404 NOT FOUND\r\n");
     send(client, buf, strlen(buf), 0);
@@ -401,7 +414,7 @@ void serve_file(int client, const char *filename)
 {
     FILE *resource = NULL;
     int numchars = 1;
-    char buf[1024];
+    //char buf[1024];
 
     buf[0] = 'A'; buf[1] = '\0';
     while ((numchars > 0) && strcmp("\n", buf))  /* read & discard headers */
@@ -462,7 +475,7 @@ int startup(u_short *port)
 /**********************************************************************/
 void unimplemented(int client)
 {
-    char buf[1024];
+    //char buf[1024];
 
     sprintf(buf, "HTTP/1.0 501 Method Not Implemented\r\n");
     send(client, buf, strlen(buf), 0);
@@ -505,6 +518,9 @@ int main(void)
 {
     int server_sock = -1;
     u_short port = PORT;
+    int client_sock;
+    struct sockaddr_in cliaddr;
+    socklen_t cli_len;
     //pthread_t newthread;
 
     signal(SIGPIPE, SIG_IGN);
@@ -524,9 +540,9 @@ int main(void)
 
     events = calloc(MAXEVENTS, sizeof(event));
 
+    int n, i;
     while (1)
     {
-        int n, i;
         n = epoll_wait(eventfd, events, MAXEVENTS, -1);
         for (i = 0; i < n; i++){
             if ((events[i].events & EPOLLERR) ||
@@ -536,10 +552,9 @@ int main(void)
                 close(events[i].data.fd);
                 continue ;
             } else if (server_sock == events[i].data.fd){
+		//printf("not too much\n");
 		while (1) {
-		    int client_sock;
-		    struct sockaddr_in cliaddr;
-		    socklen_t cli_len = sizeof(cliaddr);
+		    cli_len = sizeof(cliaddr);
 		    client_sock = accept(server_sock,
 		    		     (struct sockaddr *)&cliaddr,
                                          &cli_len);
