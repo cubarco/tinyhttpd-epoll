@@ -65,7 +65,7 @@ void accept_request(int client)
     size_t i, j;
     struct stat st;
     int cgi = 0;      /* becomes true if server decides this is a CGI
-		       * program */
+                       * program */
     char *query_string = NULL;
 
     numchars = get_line(client, buf, sizeof(buf));
@@ -104,7 +104,7 @@ void accept_request(int client)
         if (*query_string == '?')
         {
             cgi = 1;
-	    *query_string = '\0';
+            *query_string = '\0';
             query_string++;
         }
     }
@@ -166,12 +166,12 @@ void cat(int client, FILE *resource)
     int out_fd = fileno(resource);
     int result;
     for (;;) {
-	result = sendfile(client, out_fd, NULL, 512);
-	if (result == 0)
-	    break;
-	else if (result == -1)
-	    if (errno == EAGAIN)
-		continue ;
+        result = sendfile(client, out_fd, NULL, 512);
+        if (result == 0)
+            break;
+        else if (result == -1)
+            if (errno == EAGAIN)
+                continue ;
     }
 
     //char buf[1024];
@@ -220,7 +220,7 @@ void error_die(const char *sc)
  *             path to the CGI script */
 /**********************************************************************/
 void execute_cgi(int client, const char *path,
-			const char *method, const char *query_string)
+                        const char *method, const char *query_string)
 {
     //char buf[1024];
     int cgi_output[2];
@@ -331,10 +331,10 @@ int get_line(int sock, char *buf, int size)
         n = recv(sock, &c, 1, 0);
         /* DEBUG printf("%02X\n", c); */
         if (-1 == n && errno == EAGAIN){
-		printf("never be here?\n");
-		continue ;
-	}
-	else if (n > 0)
+                printf("never be here?\n");
+                continue ;
+        }
+        else if (n > 0)
         {
             if (c == '\r')
             {
@@ -348,7 +348,7 @@ int get_line(int sock, char *buf, int size)
             buf[i] = c;
             i++;
         }
-	else
+        else
             c = '\n';
     }
     buf[i] = '\0';
@@ -453,7 +453,7 @@ int startup(u_short *port)
     name.sin_addr.s_addr = htonl(INADDR_ANY);
     int reuse_addr = 1;
     setsockopt(httpd, SOL_SOCKET, SO_REUSEPORT,
-		    (const char*)&reuse_addr, sizeof(reuse_addr));
+                    (const char*)&reuse_addr, sizeof(reuse_addr));
     if (bind(httpd, (struct sockaddr *)&name, sizeof(name)) < 0)
         error_die("bind");
     if (*port == 0)  /* if dynamically allocating a port */
@@ -461,7 +461,7 @@ int startup(u_short *port)
         socklen_t namelen = sizeof(name);
         if (getsockname(httpd, (struct sockaddr *)&name, &namelen) == -1)
             error_die("getsockname");
-	*port = ntohs(name.sin_port);
+        *port = ntohs(name.sin_port);
     }
     if (listen(httpd, SOMAXCONN) < 0)
         error_die("listen");
@@ -499,19 +499,19 @@ void unimplemented(int client)
 
 static int make_socket_non_blocking (int sfd)
 {
-	int flags, s;
-	flags = fcntl (sfd, F_GETFL, 0);
-	if (flags == -1) {
-		perror ("fcntl");
-		return -1;
-	}
-	flags |= O_NONBLOCK;
-	s = fcntl (sfd, F_SETFL, flags);
-	if (s == -1) {
-		perror ("fcntl");
-		return -1;
-	}
-	return 0;
+        int flags, s;
+        flags = fcntl (sfd, F_GETFL, 0);
+        if (flags == -1) {
+                perror ("fcntl");
+                return -1;
+        }
+        flags |= O_NONBLOCK;
+        s = fcntl (sfd, F_SETFL, flags);
+        if (s == -1) {
+                perror ("fcntl");
+                return -1;
+        }
+        return 0;
 }
 
 int main(void)
@@ -552,24 +552,24 @@ int main(void)
                 close(events[i].data.fd);
                 continue ;
             } else if (server_sock == events[i].data.fd){
-		//printf("not too much\n");
-		while (1) {
-		    cli_len = sizeof(cliaddr);
-		    client_sock = accept(server_sock,
-		    		     (struct sockaddr *)&cliaddr,
+                //printf("not too much\n");
+                while (1) {
+                    cli_len = sizeof(cliaddr);
+                    client_sock = accept(server_sock,
+                                         (struct sockaddr *)&cliaddr,
                                          &cli_len);
                     if (client_sock == -1)
-			if (errno == EAGAIN)
+                        if (errno == EAGAIN)
                             break ;
-		    make_socket_non_blocking(client_sock);
+                    make_socket_non_blocking(client_sock);
                     event.data.fd = client_sock;
                     event.events = EPOLLIN | EPOLLET;
                     epoll_ctl(eventfd, EPOLL_CTL_ADD, client_sock, &event);
-		}
+                }
                 continue ;
             } else {
                 accept_request(events[i].data.fd);
-		epoll_ctl(eventfd, EPOLL_CTL_DEL, events[i].data.fd, &events[i]);
+                epoll_ctl(eventfd, EPOLL_CTL_DEL, events[i].data.fd, &events[i]);
             }
         }
     }
