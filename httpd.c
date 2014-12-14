@@ -173,7 +173,7 @@ void cat(int client, FILE *resource)
 	    if (errno == EAGAIN)
 		continue ;
     }
-    
+
     //char buf[1024];
 
     //fgets(buf, sizeof(buf), resource);
@@ -352,7 +352,7 @@ int get_line(int sock, char *buf, int size)
             c = '\n';
     }
     buf[i] = '\0';
-    
+
     return(i);
 }
 
@@ -463,7 +463,7 @@ int startup(u_short *port)
             error_die("getsockname");
 	*port = ntohs(name.sin_port);
     }
-    if (listen(httpd, 5) < 0)
+    if (listen(httpd, SOMAXCONN) < 0)
         error_die("listen");
     return(httpd);
 }
