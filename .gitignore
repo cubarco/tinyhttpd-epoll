@@ -31,7 +31,7 @@
 httpd
 
 # cache of vim
-.*
+.*~
 
 # ctags and cscope files
 tags
