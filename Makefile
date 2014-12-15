@@ -1,7 +1,10 @@
+CC = gcc
+CFLAGS += -Wall
+
+httpd: httpd.o
+httpd.o: httpd.c
+
+.PHONY: all clean
 all: httpd
-
-httpd: httpd.c
-	gcc -W -Wall -o httpd httpd.c
-
 clean:
-	rm httpd
+	rm httpd *.o
